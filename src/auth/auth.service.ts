@@ -62,3 +62,5 @@ export class AuthService {
     };
   }
 }
+
+// Final submission version - Role Based Auth completed
