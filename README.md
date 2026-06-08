@@ -69,7 +69,7 @@ All APIs were tested using:
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 - NestJS
 - TypeScript
