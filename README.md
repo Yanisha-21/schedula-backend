@@ -53,7 +53,7 @@ Each role has restricted access to specific protected routes.
 
 ---
 
-## 🧪 API Testing
+##  API Testing
 
 All APIs were tested using:
 - Thunder Client
