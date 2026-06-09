@@ -4,6 +4,7 @@ import {
   Get,
   Patch,
   Body,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 
@@ -17,19 +18,19 @@ export class PatientController {
 
   @Post('profile')
   @UseGuards(AuthGuard('jwt'), new RolesGuard(['PATIENT']))
-  createProfile(@Body() body: any) {
-    return this.patientService.createProfile(body);
+  createProfile(@Req() req, @Body() body: any) {
+    return this.patientService.createProfile(req.user, body);
   }
 
   @Get('profile')
   @UseGuards(AuthGuard('jwt'), new RolesGuard(['PATIENT']))
-  getProfile() {
-    return this.patientService.getProfile();
+  getProfile(@Req() req) {
+    return this.patientService.getProfile(req.user);
   }
 
   @Patch('profile')
   @UseGuards(AuthGuard('jwt'), new RolesGuard(['PATIENT']))
-  updateProfile(@Body() body: any) {
-    return this.patientService.updateProfile(body);
+  updateProfile(@Req() req, @Body() body: any) {
+    return this.patientService.updateProfile(req.user, body);
   }
 }
