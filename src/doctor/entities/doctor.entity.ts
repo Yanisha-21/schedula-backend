@@ -31,6 +31,9 @@ export class Doctor {
   @Column()
   availability!: string;
 
+  @Column({ default: true })   // ← ADD THIS
+  isAvailable!: boolean;
+
   @Column({ nullable: true })
   profileDetails!: string;
 

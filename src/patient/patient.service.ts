@@ -1,49 +1,64 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+import { Patient } from './entities/patient.entity';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class PatientService {
-  private patientProfile: any = null;
+  constructor(
+    @InjectRepository(Patient)
+    private patientRepo: Repository<Patient>,
+  ) {}
 
-  createProfile(body: any) {
-    if (this.patientProfile) {
-      return {
-        message: 'Patient profile already exists',
-      };
+  // CREATE PATIENT PROFILE
+  async createProfile(user: User, body: any) {
+    const existing = await this.patientRepo.findOne({
+      where: { user: { id: user.id } },
+    });
+
+    if (existing) {
+      throw new BadRequestException('Patient profile already exists');
     }
 
-    this.patientProfile = body;
-
-    return {
-      message: 'Patient profile created successfully',
-      data: this.patientProfile,
-    };
-  }
-
-  getProfile() {
-    if (!this.patientProfile) {
-      return {
-        message: 'Patient profile not found',
-      };
-    }
-
-    return this.patientProfile;
-  }
-
-  updateProfile(body: any) {
-    if (!this.patientProfile) {
-      return {
-        message: 'Patient profile not found',
-      };
-    }
-
-    this.patientProfile = {
-      ...this.patientProfile,
+    const patient = this.patientRepo.create({
       ...body,
-    };
+      user,
+    });
 
-    return {
-      message: 'Patient profile updated successfully',
-      data: this.patientProfile,
-    };
+    return await this.patientRepo.save(patient);
+  }
+
+  // GET PATIENT PROFILE
+  async getProfile(user: User) {
+    const profile = await this.patientRepo.findOne({
+      where: { user: { id: user.id } },
+    });
+
+    if (!profile) {
+      throw new NotFoundException('Patient profile not found');
+    }
+
+    return profile;
+  }
+
+  // UPDATE PATIENT PROFILE
+  async updateProfile(user: User, body: any) {
+    const profile = await this.patientRepo.findOne({
+      where: { user: { id: user.id } },
+    });
+
+    if (!profile) {
+      throw new NotFoundException('Patient profile not found');
+    }
+
+    Object.assign(profile, body);
+
+    return await this.patientRepo.save(profile);
   }
 }
