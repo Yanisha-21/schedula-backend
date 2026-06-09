@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToOne,
+} from 'typeorm';
+
+import { Doctor } from '../../doctor/entities/doctor.entity';
+import { Patient } from '../../patient/entities/patient.entity';
 
 export enum Role {
   DOCTOR = 'DOCTOR',
@@ -24,4 +32,12 @@ export class User {
     enum: Role,
   })
   role!: Role;
+
+  // 🔥 ADD THIS
+  @OneToOne(() => Doctor, (doctor) => doctor.user)
+  doctor!: Doctor;
+
+  // 🔥 ADD THIS
+  @OneToOne(() => Patient, (patient) => patient.user)
+  patient!: Patient;
 }

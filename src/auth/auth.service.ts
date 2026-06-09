@@ -13,7 +13,7 @@ export class AuthService {
     private userRepository: Repository<User>,
   ) {}
 
-  // ✅ SIGNUP (SAVE TO DATABASE)
+  //  SIGNUP (SAVE TO DATABASE)
   async signup(body: any) {
     const hashedPassword = await bcrypt.hash(body.password, 10);
 
@@ -37,7 +37,7 @@ export class AuthService {
     };
   }
 
-  // ✅ LOGIN (REAL DB + JWT)
+  //  LOGIN (REAL DB + JWT)
   async login(email: string, password: string) {
     const user = await this.userRepository.findOne({
       where: { email },
@@ -62,3 +62,5 @@ export class AuthService {
     };
   }
 }
+
+// Final submission version - Role Based Auth completed

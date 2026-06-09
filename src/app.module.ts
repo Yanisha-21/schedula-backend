@@ -4,14 +4,17 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
-import { User } from './users/entities/user.entity';
+import { DoctorModule } from './doctor/doctor.module';
+import { PatientModule } from './patient/patient.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
 
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -24,13 +27,15 @@ import { AppService } from './app.service';
         password: config.get('DB_PASSWORD'),
         database: config.get('DB_NAME'),
 
-        entities: [User],
-        synchronize: true,
+        autoLoadEntities: true,
+        synchronize: false,
       }),
     }),
 
     UsersModule,
     AuthModule,
+    DoctorModule,
+    PatientModule,
   ],
 
   controllers: [AppController],
