@@ -22,7 +22,10 @@ import { Patient } from './patient/entities/patient.entity';
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_NAME'),
         entities: [User, Doctor, Patient],
-        synchronize: false,   // ← changed to false
+        synchronize: false,
+        ssl: {
+          rejectUnauthorized: false,  // ← added
+        },
       }),
       inject: [ConfigService],
     }),
