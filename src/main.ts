@@ -12,6 +12,12 @@ async function bootstrap() {
     }),
   );
 
+  // ← ADD THIS
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.get('/', (req, res) => {
+    res.json({ message: 'Schedula Backend API is running 🚀', status: 'OK' });
+  });
+
   const port = process.env.PORT || 3001;
   await app.listen(port);
 }
