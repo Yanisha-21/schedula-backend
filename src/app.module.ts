@@ -8,6 +8,8 @@ import { PatientModule } from './patient/patient.module';
 import { User } from './users/entities/user.entity';
 import { Doctor } from './doctor/entities/doctor.entity';
 import { Patient } from './patient/entities/patient.entity';
+import { RecurringAvailability } from './doctor/entities/recurring-availability.entity';
+import { CustomAvailability } from './doctor/entities/custom-availability.entity';
 
 @Module({
   imports: [
@@ -16,15 +18,15 @@ import { Patient } from './patient/entities/patient.entity';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
-        host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT'),
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_NAME'),
-        entities: [User, Doctor, Patient],
+        host: configService.get('DB_HOST'),
+        port: configService.get('DB_PORT'),
+        username: configService.get('DB_USERNAME'),
+        password: configService.get('DB_PASSWORD'),
+        database: configService.get('DB_NAME'),
+        entities: [User, Doctor, Patient, RecurringAvailability, CustomAvailability], // ← updated
         synchronize: false,
         ssl: {
-          rejectUnauthorized: false,  // ← added
+          rejectUnauthorized: false,
         },
       }),
       inject: [ConfigService],
