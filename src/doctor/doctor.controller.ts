@@ -22,8 +22,6 @@ import { CreateCustomAvailabilityDto } from './dto/create-custom-availability.dt
 export class DoctorController {
   constructor(private readonly doctorService: DoctorService) {}
 
-  // ── EXISTING ROUTES ──
-
   @UseGuards(JwtAuthGuard)
   @Post('profile')
   createProfile(@Req() req, @Body() body: any) {
@@ -46,22 +44,6 @@ export class DoctorController {
   findAll(@Query() query: GetDoctorsQueryDto) {
     return this.doctorService.findAll(query);
   }
-
-  @Get(':id')
-  findById(
-    @Param(
-      'id',
-      new ParseIntPipe({
-        exceptionFactory: () =>
-          new BadRequestException('Invalid doctor ID. ID must be a number.'),
-      }),
-    )
-    id: number,
-  ) {
-    return this.doctorService.findById(id);
-  }
-
-  // ── NEW AVAILABILITY ROUTES ──
 
   @UseGuards(JwtAuthGuard)
   @Post('availability')
@@ -110,5 +92,19 @@ export class DoctorController {
   @Get('availability/date')
   getAvailabilityByDate(@Req() req, @Query('date') date: string) {
     return this.doctorService.getAvailabilityByDate(req.user, date);
+  }
+
+  @Get(':id')
+  findById(
+    @Param(
+      'id',
+      new ParseIntPipe({
+        exceptionFactory: () =>
+          new BadRequestException('Invalid doctor ID. ID must be a number.'),
+      }),
+    )
+    id: number,
+  ) {
+    return this.doctorService.findById(id);
   }
 }
