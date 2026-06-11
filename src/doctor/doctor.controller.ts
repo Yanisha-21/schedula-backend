@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Patch,
+  Delete,
   Body,
   Req,
   Param,
@@ -14,12 +15,14 @@ import {
 import { DoctorService } from './doctor.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetDoctorsQueryDto } from './dto/get-doctors-query.dto';
+import { CreateRecurringAvailabilityDto } from './dto/create-recurring-availability.dto';
+import { CreateCustomAvailabilityDto } from './dto/create-custom-availability.dto';
 
 @Controller('doctor')
 export class DoctorController {
   constructor(private readonly doctorService: DoctorService) {}
 
-  // ── YOUR EXISTING PROTECTED ROUTES (unchanged) ──
+  // ── EXISTING ROUTES ──
 
   @UseGuards(JwtAuthGuard)
   @Post('profile')
@@ -39,15 +42,11 @@ export class DoctorController {
     return this.doctorService.updateProfile(req.user, body);
   }
 
-  // ── NEW PUBLIC ROUTES BELOW ──
-
-  // GET /doctor  →  list with filters + pagination
   @Get()
   findAll(@Query() query: GetDoctorsQueryDto) {
     return this.doctorService.findAll(query);
   }
 
-  // GET /doctor/:id  →  single doctor by ID
   @Get(':id')
   findById(
     @Param(
@@ -60,5 +59,56 @@ export class DoctorController {
     id: number,
   ) {
     return this.doctorService.findById(id);
+  }
+
+  // ── NEW AVAILABILITY ROUTES ──
+
+  @UseGuards(JwtAuthGuard)
+  @Post('availability')
+  createRecurringAvailability(
+    @Req() req,
+    @Body() dto: CreateRecurringAvailabilityDto,
+  ) {
+    return this.doctorService.createRecurringAvailability(req.user, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('availability')
+  getRecurringAvailability(@Req() req) {
+    return this.doctorService.getRecurringAvailability(req.user);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('availability/:id')
+  updateRecurringAvailability(
+    @Req() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateRecurringAvailabilityDto,
+  ) {
+    return this.doctorService.updateRecurringAvailability(req.user, id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('availability/:id')
+  deleteRecurringAvailability(
+    @Req() req,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.doctorService.deleteRecurringAvailability(req.user, id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('availability/override')
+  createCustomAvailability(
+    @Req() req,
+    @Body() dto: CreateCustomAvailabilityDto,
+  ) {
+    return this.doctorService.createCustomAvailability(req.user, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('availability/date')
+  getAvailabilityByDate(@Req() req, @Query('date') date: string) {
+    return this.doctorService.getAvailabilityByDate(req.user, date);
   }
 }
