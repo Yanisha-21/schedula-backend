@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetDoctorsQueryDto } from './dto/get-doctors-query.dto';
 import { CreateRecurringAvailabilityDto } from './dto/create-recurring-availability.dto';
 import { CreateCustomAvailabilityDto } from './dto/create-custom-availability.dto';
+import { GetSlotsQueryDto } from './dto/get-slots-query.dto';
 
 @Controller('doctor')
 export class DoctorController {
@@ -43,6 +44,22 @@ export class DoctorController {
   @Get()
   findAll(@Query() query: GetDoctorsQueryDto) {
     return this.doctorService.findAll(query);
+  }
+
+  // ── SLOT GENERATION (DAY 7) ──
+  @Get(':doctorId/slots')
+  getAvailableSlots(
+    @Param(
+      'doctorId',
+      new ParseIntPipe({
+        exceptionFactory: () =>
+          new BadRequestException('Invalid doctor ID. ID must be a number.'),
+      }),
+    )
+    doctorId: number,
+    @Query() query: GetSlotsQueryDto,
+  ) {
+    return this.doctorService.getAvailableSlots(doctorId, query);
   }
 
   @UseGuards(JwtAuthGuard)
