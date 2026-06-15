@@ -20,7 +20,7 @@ export class DoctorService {
     private recurringRepo: Repository<RecurringAvailability>,
     @InjectRepository(CustomAvailability)
     private customRepo: Repository<CustomAvailability>,
-  ) {}
+  ) { }
 
   // ── EXISTING METHODS ──
 
@@ -178,98 +178,130 @@ export class DoctorService {
   }
 
   // ── SLOT GENERATION (DAY 7) ──
+async getAvailableSlots(doctorId: number, query: GetSlotsQueryDto) {
+  const { date, duration = 30 } = query;
 
-  async getAvailableSlots(doctorId: number, query: GetSlotsQueryDto) {
-    const { date, duration = 30 } = query;
+  // Check whether the doctor exists
+  const doctor = await this.doctorRepo.findOne({ where: { id: doctorId } });
+  if (!doctor) {
+    throw new NotFoundException(`Doctor with ID ${doctorId} not found.`);
+  }
 
-    const doctor = await this.doctorRepo.findOne({ where: { id: doctorId } });
-    if (!doctor) {
-      throw new NotFoundException(`Doctor with ID ${doctorId} not found.`);
-    }
+  // Validate date format
+  const requestedDate = new Date(date);
+  if (isNaN(requestedDate.getTime())) {
+    throw new BadRequestException('Invalid date format. Use YYYY-MM-DD.');
+  }
 
-    const requestedDate = new Date(date);
-    if (isNaN(requestedDate.getTime())) {
-      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD.');
-    }
+  // Prevent fetching slots for past dates
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  requestedDate.setHours(0, 0, 0, 0);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    requestedDate.setHours(0, 0, 0, 0);
-    if (requestedDate < today) {
-      throw new BadRequestException('Cannot fetch slots for a past date.');
-    }
+  if (requestedDate < today) {
+    throw new BadRequestException('Cannot fetch slots for a past date.');
+  }
 
-    if (duration < 5) {
-      throw new BadRequestException('Invalid duration. Must be at least 5 minutes.');
-    }
+  // Validate slot duration
+  if (duration < 5) {
+    throw new BadRequestException(
+      'Invalid duration. Must be at least 5 minutes.',
+    );
+  }
 
-    const custom = await this.customRepo.find({
-      where: { doctor: { id: doctorId }, date },
+  // Check for custom availability first (override logic)
+  const custom = await this.customRepo.find({
+    where: { doctor: { id: doctorId }, date },
+  });
+
+  let availabilityWindows: { startTime: string; endTime: string }[] = [];
+
+  if (custom.length > 0) {
+    // Use custom availability if available
+    availabilityWindows = custom.map((c) => ({
+      startTime: c.startTime,
+      endTime: c.endTime,
+    }));
+  } else {
+    // Otherwise use recurring availability
+    const dayOfWeek = requestedDate.toLocaleDateString('en-US', {
+      weekday: 'long',
     });
 
-    let availabilityWindows: { startTime: string; endTime: string }[] = [];
+    const recurring = await this.recurringRepo.find({
+      where: { doctor: { id: doctorId }, dayOfWeek },
+    });
 
-    if (custom.length > 0) {
-      availabilityWindows = custom.map((c) => ({ startTime: c.startTime, endTime: c.endTime }));
-    } else {
-      const dayOfWeek = requestedDate.toLocaleDateString('en-US', { weekday: 'long' });
-      const recurring = await this.recurringRepo.find({
-        where: { doctor: { id: doctorId }, dayOfWeek },
+    if (recurring.length === 0) {
+      throw new NotFoundException('No availability found for this date.');
+    }
+
+    availabilityWindows = recurring.map((r) => ({
+      startTime: r.startTime,
+      endTime: r.endTime,
+    }));
+  }
+
+  // Store generated slots
+  const slots: { startTime: string; endTime: string }[] = [];
+
+  // Check whether requested date is today
+  const isToday = requestedDate.getTime() === today.getTime();
+  const now = new Date();
+
+  // Generate slots from availability windows
+  for (const window of availabilityWindows) {
+    const [startH, startM] = window.startTime.split(':').map(Number);
+    const [endH, endM] = window.endTime.split(':').map(Number);
+
+    let currentMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+
+    while (currentMinutes + duration <= endMinutes) {
+      const slotStartH = Math.floor(currentMinutes / 60);
+      const slotStartM = currentMinutes % 60;
+
+      const slotEndMinutes = currentMinutes + duration;
+      const slotEndH = Math.floor(slotEndMinutes / 60);
+      const slotEndM = slotEndMinutes % 60;
+
+      const slotStart = `${String(slotStartH).padStart(2, '0')}:${String(slotStartM).padStart(2, '0')}`;
+      const slotEnd = `${String(slotEndH).padStart(2, '0')}:${String(slotEndM).padStart(2, '0')}`;
+
+      // Filter past slots if requested date is today
+      if (isToday) {
+        const slotDateTime = new Date(requestedDate);
+        slotDateTime.setHours(slotStartH, slotStartM, 0, 0);
+
+        if (slotDateTime <= now) {
+          currentMinutes += duration;
+          continue;
+        }
+      }
+
+      // Add available slot
+      slots.push({
+        startTime: slotStart,
+        endTime: slotEnd,
       });
 
-      if (recurring.length === 0) {
-        throw new NotFoundException('No availability found for this date.');
-      }
-
-      availabilityWindows = recurring.map((r) => ({ startTime: r.startTime, endTime: r.endTime }));
+      currentMinutes += duration;
     }
-
-    const slots: { startTime: string; endTime: string }[] = [];
-    const isToday = requestedDate.getTime() === today.getTime();
-    const now = new Date();
-
-    for (const window of availabilityWindows) {
-      const [startH, startM] = window.startTime.split(':').map(Number);
-      const [endH, endM] = window.endTime.split(':').map(Number);
-
-      let currentMinutes = startH * 60 + startM;
-      const endMinutes = endH * 60 + endM;
-
-      while (currentMinutes + duration <= endMinutes) {
-        const slotStartH = Math.floor(currentMinutes / 60);
-        const slotStartM = currentMinutes % 60;
-        const slotEndMinutes = currentMinutes + duration;
-        const slotEndH = Math.floor(slotEndMinutes / 60);
-        const slotEndM = slotEndMinutes % 60;
-
-        const slotStart = `${String(slotStartH).padStart(2, '0')}:${String(slotStartM).padStart(2, '0')}`;
-        const slotEnd = `${String(slotEndH).padStart(2, '0')}:${String(slotEndM).padStart(2, '0')}`;
-
-        if (isToday) {
-          const slotDateTime = new Date(requestedDate);
-          slotDateTime.setHours(slotStartH, slotStartM, 0, 0);
-          if (slotDateTime <= now) {
-            currentMinutes += duration;
-            continue;
-          }
-        }
-
-        slots.push({ startTime: slotStart, endTime: slotEnd });
-        currentMinutes += duration;
-      }
-    }
-
-    if (slots.length === 0) {
-      throw new NotFoundException('No available slots for this date.');
-    }
-
-    return {
-      success: true,
-      doctorId,
-      date,
-      duration,
-      totalSlots: slots.length,
-      data: slots,
-    };
   }
+
+  // Return error if no slots are available
+  if (slots.length === 0) {
+    throw new NotFoundException('No available slots for this date.');
+  }
+
+  // Return generated slots
+  return {
+    success: true,
+    doctorId,
+    date,
+    duration,
+    totalSlots: slots.length,
+    data: slots,
+  };
+}
 }
