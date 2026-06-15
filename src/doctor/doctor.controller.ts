@@ -46,6 +46,13 @@ export class DoctorController {
     return this.doctorService.findAll(query);
   }
 
+  // ── DOCTOR APPOINTMENTS (DAY 8) ──
+  @UseGuards(JwtAuthGuard)
+  @Get('appointments')
+  getDoctorAppointments(@Req() req) {
+    return this.doctorService.getDoctorAppointments(req.user);
+  }
+
   // ── SLOT GENERATION (DAY 7) ──
   @Get(':doctorId/slots')
   getAvailableSlots(

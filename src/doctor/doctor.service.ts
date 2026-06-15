@@ -5,6 +5,7 @@ import { Repository, ILike } from 'typeorm';
 import { Doctor } from './entities/doctor.entity';
 import { RecurringAvailability } from './entities/recurring-availability.entity';
 import { CustomAvailability } from './entities/custom-availability.entity';
+import { Appointment } from '../appointment/entities/appointment.entity';
 import { User } from '../users/entities/user.entity';
 import { GetDoctorsQueryDto } from './dto/get-doctors-query.dto';
 import { CreateRecurringAvailabilityDto } from './dto/create-recurring-availability.dto';
@@ -20,6 +21,8 @@ export class DoctorService {
     private recurringRepo: Repository<RecurringAvailability>,
     @InjectRepository(CustomAvailability)
     private customRepo: Repository<CustomAvailability>,
+    @InjectRepository(Appointment)
+    private appointmentRepo: Repository<Appointment>,
   ) {}
 
   // ── EXISTING METHODS ──
@@ -270,6 +273,38 @@ export class DoctorService {
       duration,
       totalSlots: slots.length,
       data: slots,
+    };
+  }
+
+  // ── DOCTOR APPOINTMENTS (DAY 8) ──
+
+  async getDoctorAppointments(user: User) {
+    const doctor = await this.doctorRepo.findOne({ where: { user: { id: user.id } } });
+    if (!doctor) throw new NotFoundException('Doctor profile not found');
+
+    const appointments = await this.appointmentRepo.find({
+      where: { doctor: { id: doctor.id } },
+      relations: { patient: true },
+      order: { date: 'ASC', startTime: 'ASC' },
+    });
+
+    if (appointments.length === 0) {
+      throw new NotFoundException('No appointments found.');
+    }
+
+    return {
+      success: true,
+      data: appointments.map((a) => ({
+        id: a.id,
+        patient: {
+          id: a.patient.id,
+          fullName: a.patient.fullName,
+        },
+        date: a.date,
+        startTime: a.startTime,
+        endTime: a.endTime,
+        status: a.status,
+      })),
     };
   }
 }
