@@ -5,11 +5,14 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { DoctorModule } from './doctor/doctor.module';
 import { PatientModule } from './patient/patient.module';
+import { AppointmentModule } from './appointment/appointment.module';
 import { User } from './users/entities/user.entity';
 import { Doctor } from './doctor/entities/doctor.entity';
 import { Patient } from './patient/entities/patient.entity';
 import { RecurringAvailability } from './doctor/entities/recurring-availability.entity';
 import { CustomAvailability } from './doctor/entities/custom-availability.entity';
+import { Appointment } from './appointment/entities/appointment.entity';
+import { WaveSchedule } from './doctor/entities/wave-schedule.entity';
 
 @Module({
   imports: [
@@ -23,7 +26,7 @@ import { CustomAvailability } from './doctor/entities/custom-availability.entity
         username: configService.get('DB_USERNAME'),
         password: configService.get('DB_PASSWORD'),
         database: configService.get('DB_NAME'),
-        entities: [User, Doctor, Patient, RecurringAvailability, CustomAvailability], // ← updated
+        entities: [User, Doctor, Patient, RecurringAvailability, CustomAvailability, Appointment, WaveSchedule],
         synchronize: false,
         ssl: {
           rejectUnauthorized: false,
@@ -34,6 +37,7 @@ import { CustomAvailability } from './doctor/entities/custom-availability.entity
     AuthModule,
     DoctorModule,
     PatientModule,
+    AppointmentModule,
   ],
 })
 export class AppModule {}
