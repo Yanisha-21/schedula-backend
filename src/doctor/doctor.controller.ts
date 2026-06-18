@@ -18,6 +18,7 @@ import { GetDoctorsQueryDto } from './dto/get-doctors-query.dto';
 import { CreateRecurringAvailabilityDto } from './dto/create-recurring-availability.dto';
 import { CreateCustomAvailabilityDto } from './dto/create-custom-availability.dto';
 import { GetSlotsQueryDto } from './dto/get-slots-query.dto';
+import { UpdateSchedulingTypeDto, CreateWaveScheduleDto, GetWaveSlotsQueryDto } from './dto/create-schedule.dto';
 
 @Controller('doctor')
 export class DoctorController {
@@ -46,6 +47,39 @@ export class DoctorController {
     return this.doctorService.findAll(query);
   }
 
+  // ── DOCTOR APPOINTMENTS (DAY 8) ──
+  @UseGuards(JwtAuthGuard)
+  @Get('appointments')
+  getDoctorAppointments(@Req() req) {
+    return this.doctorService.getDoctorAppointments(req.user);
+  }
+
+  // ── SCHEDULING TYPE (DAY 9) ──
+  @UseGuards(JwtAuthGuard)
+  @Patch('scheduling-type')
+  updateSchedulingType(
+    @Req() req,
+    @Body() dto: UpdateSchedulingTypeDto,
+  ) {
+    return this.doctorService.updateSchedulingType(req.user, dto);
+  }
+
+  // ── WAVE SCHEDULE (DAY 9) ──
+  @UseGuards(JwtAuthGuard)
+  @Post('wave-schedule')
+  createWaveSchedule(
+    @Req() req,
+    @Body() dto: CreateWaveScheduleDto,
+  ) {
+    return this.doctorService.createWaveSchedule(req.user, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('wave-schedule')
+  getWaveSchedule(@Req() req) {
+    return this.doctorService.getWaveSchedule(req.user);
+  }
+
   // ── SLOT GENERATION (DAY 7) ──
   @Get(':doctorId/slots')
   getAvailableSlots(
@@ -60,6 +94,36 @@ export class DoctorController {
     @Query() query: GetSlotsQueryDto,
   ) {
     return this.doctorService.getAvailableSlots(doctorId, query);
+  }
+
+  @Get(':doctorId/wave-slots')
+  getWaveSlots(
+    @Param(
+      'doctorId',
+      new ParseIntPipe({
+        exceptionFactory: () =>
+          new BadRequestException('Invalid doctor ID. ID must be a number.'),
+      }),
+    )
+    doctorId: number,
+    @Query() query: GetWaveSlotsQueryDto,
+  ) {
+    return this.doctorService.getWaveSlots(doctorId, query);
+  }
+
+  @Get(':doctorId/stream-slots')
+  getStreamSlots(
+    @Param(
+      'doctorId',
+      new ParseIntPipe({
+        exceptionFactory: () =>
+          new BadRequestException('Invalid doctor ID. ID must be a number.'),
+      }),
+    )
+    doctorId: number,
+    @Query() query: GetSlotsQueryDto,
+  ) {
+    return this.doctorService.getStreamSlots(doctorId, query);
   }
 
   @UseGuards(JwtAuthGuard)
