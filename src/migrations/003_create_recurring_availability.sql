@@ -1,3 +1,5 @@
+-- Migration: Create recurring_availability table for Doctor Availability feature
+
 CREATE TABLE IF NOT EXISTS recurring_availability (
   id SERIAL PRIMARY KEY,
   "dayOfWeek" VARCHAR(20) NOT NULL,
