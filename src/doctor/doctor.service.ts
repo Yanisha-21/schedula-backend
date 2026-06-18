@@ -2,15 +2,17 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
 
-import { Doctor } from './entities/doctor.entity';
+import { Doctor, SchedulingType } from './entities/doctor.entity';
 import { RecurringAvailability } from './entities/recurring-availability.entity';
 import { CustomAvailability } from './entities/custom-availability.entity';
+import { WaveSchedule } from './entities/wave-schedule.entity';
 import { Appointment } from '../appointment/entities/appointment.entity';
 import { User } from '../users/entities/user.entity';
 import { GetDoctorsQueryDto } from './dto/get-doctors-query.dto';
 import { CreateRecurringAvailabilityDto } from './dto/create-recurring-availability.dto';
 import { CreateCustomAvailabilityDto } from './dto/create-custom-availability.dto';
 import { GetSlotsQueryDto } from './dto/get-slots-query.dto';
+import { UpdateSchedulingTypeDto, CreateWaveScheduleDto, GetWaveSlotsQueryDto } from './dto/create-schedule.dto';
 
 @Injectable()
 export class DoctorService {
@@ -21,6 +23,8 @@ export class DoctorService {
     private recurringRepo: Repository<RecurringAvailability>,
     @InjectRepository(CustomAvailability)
     private customRepo: Repository<CustomAvailability>,
+    @InjectRepository(WaveSchedule)
+    private waveScheduleRepo: Repository<WaveSchedule>,
     @InjectRepository(Appointment)
     private appointmentRepo: Repository<Appointment>,
   ) {}
@@ -186,9 +190,7 @@ export class DoctorService {
     const { date, duration = 30 } = query;
 
     const doctor = await this.doctorRepo.findOne({ where: { id: doctorId } });
-    if (!doctor) {
-      throw new NotFoundException(`Doctor with ID ${doctorId} not found.`);
-    }
+    if (!doctor) throw new NotFoundException(`Doctor with ID ${doctorId} not found.`);
 
     const requestedDate = new Date(date);
     if (isNaN(requestedDate.getTime())) {
@@ -288,23 +290,127 @@ export class DoctorService {
       order: { date: 'ASC', startTime: 'ASC' },
     });
 
-    if (appointments.length === 0) {
-      throw new NotFoundException('No appointments found.');
-    }
+    if (appointments.length === 0) throw new NotFoundException('No appointments found.');
 
     return {
       success: true,
       data: appointments.map((a) => ({
         id: a.id,
-        patient: {
-          id: a.patient.id,
-          fullName: a.patient.fullName,
-        },
+        patient: { id: a.patient.id, fullName: a.patient.fullName },
         date: a.date,
         startTime: a.startTime,
         endTime: a.endTime,
         status: a.status,
       })),
     };
+  }
+
+  // ── SCHEDULING TYPE (DAY 9) ──
+
+  async updateSchedulingType(user: User, dto: UpdateSchedulingTypeDto) {
+    const doctor = await this.doctorRepo.findOne({ where: { user: { id: user.id } } });
+    if (!doctor) throw new NotFoundException('Doctor profile not found');
+    doctor.schedulingType = dto.schedulingType;
+    await this.doctorRepo.save(doctor);
+    return { success: true, message: `Scheduling type updated to ${dto.schedulingType}`, schedulingType: dto.schedulingType };
+  }
+
+  // ── WAVE SCHEDULE (DAY 9) ──
+
+  async createWaveSchedule(user: User, dto: CreateWaveScheduleDto) {
+    const doctor = await this.doctorRepo.findOne({ where: { user: { id: user.id } } });
+    if (!doctor) throw new NotFoundException('Doctor profile not found');
+
+    if (doctor.schedulingType !== SchedulingType.WAVE) {
+      throw new BadRequestException('Doctor scheduling type must be WAVE to create wave schedule');
+    }
+
+    if (dto.startTime >= dto.endTime) {
+      throw new BadRequestException('Start time must be before end time');
+    }
+
+    if (dto.maxPatients < 1) {
+      throw new BadRequestException('Max patients must be at least 1');
+    }
+
+    const existing = await this.waveScheduleRepo.find({
+      where: { doctor: { id: doctor.id }, dayOfWeek: dto.dayOfWeek },
+    });
+
+    for (const wave of existing) {
+      if (dto.startTime < wave.endTime && dto.endTime > wave.startTime) {
+        throw new BadRequestException('Wave schedule overlaps with existing wave');
+      }
+    }
+
+    const wave = this.waveScheduleRepo.create({ ...dto, doctor });
+    return await this.waveScheduleRepo.save(wave);
+  }
+
+  async getWaveSchedule(user: User) {
+    const doctor = await this.doctorRepo.findOne({ where: { user: { id: user.id } } });
+    if (!doctor) throw new NotFoundException('Doctor profile not found');
+
+    const waves = await this.waveScheduleRepo.find({ where: { doctor: { id: doctor.id } } });
+    if (waves.length === 0) throw new NotFoundException('No wave schedules found');
+
+    return { success: true, data: waves };
+  }
+
+  async getWaveSlots(doctorId: number, query: GetWaveSlotsQueryDto) {
+    const { date } = query;
+
+    const doctor = await this.doctorRepo.findOne({ where: { id: doctorId } });
+    if (!doctor) throw new NotFoundException(`Doctor with ID ${doctorId} not found.`);
+
+    if (doctor.schedulingType !== SchedulingType.WAVE) {
+      throw new BadRequestException('This doctor uses STREAM scheduling. Use /slots endpoint instead.');
+    }
+
+    const requestedDate = new Date(date);
+    if (isNaN(requestedDate.getTime())) {
+      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD.');
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    requestedDate.setHours(0, 0, 0, 0);
+    if (requestedDate < today) {
+      throw new BadRequestException('Cannot fetch slots for a past date.');
+    }
+
+    const dayOfWeek = requestedDate.toLocaleDateString('en-US', { weekday: 'long' });
+    const waves = await this.waveScheduleRepo.find({
+      where: { doctor: { id: doctorId }, dayOfWeek },
+    });
+
+    if (waves.length === 0) throw new NotFoundException('No wave schedule found for this date.');
+
+    return {
+      success: true,
+      doctorId,
+      date,
+      schedulingType: 'WAVE',
+      data: waves.map((w) => ({
+        id: w.id,
+        startTime: w.startTime,
+        endTime: w.endTime,
+        maxPatients: w.maxPatients,
+        bookedCount: w.bookedCount,
+        availableSlots: w.maxPatients - w.bookedCount,
+        isFull: w.bookedCount >= w.maxPatients,
+      })),
+    };
+  }
+
+  async getStreamSlots(doctorId: number, query: any) {
+    const doctor = await this.doctorRepo.findOne({ where: { id: doctorId } });
+    if (!doctor) throw new NotFoundException(`Doctor with ID ${doctorId} not found.`);
+
+    if (doctor.schedulingType !== SchedulingType.STREAM) {
+      throw new BadRequestException('This doctor uses WAVE scheduling. Use /wave-slots endpoint instead.');
+    }
+
+    return this.getAvailableSlots(doctorId, query);
   }
 }

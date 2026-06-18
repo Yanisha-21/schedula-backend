@@ -34,4 +34,14 @@ export class AppointmentController {
   cancelAppointment(@Req() req, @Param('id', ParseIntPipe) id: number) {
     return this.appointmentService.cancelAppointment(req.user, id);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/reschedule')
+  rescheduleAppointment(
+    @Req() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateAppointmentDto,
+  ) {
+    return this.appointmentService.rescheduleAppointment(req.user, id, dto);
+  }
 }

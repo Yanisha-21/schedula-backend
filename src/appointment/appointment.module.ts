@@ -6,6 +6,7 @@ import { Doctor } from '../doctor/entities/doctor.entity';
 import { Patient } from '../patient/entities/patient.entity';
 import { RecurringAvailability } from '../doctor/entities/recurring-availability.entity';
 import { CustomAvailability } from '../doctor/entities/custom-availability.entity';
+import { WaveSchedule } from '../doctor/entities/wave-schedule.entity';
 import { AppointmentController } from './appointment.controller';
 import { AppointmentService } from './appointment.service';
 
@@ -17,6 +18,7 @@ import { AppointmentService } from './appointment.service';
       Patient,
       RecurringAvailability,
       CustomAvailability,
+      WaveSchedule,
     ]),
   ],
   controllers: [AppointmentController],
