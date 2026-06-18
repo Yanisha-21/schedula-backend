@@ -264,12 +264,10 @@ export class AppointmentService {
       throw new BadRequestException('Cannot reschedule within 30 minutes of appointment time.');
     }
 
-    // Cannot reschedule to same slot
     if (appointment.date === dto.date && appointment.startTime === dto.startTime && appointment.endTime === dto.endTime) {
       throw new BadRequestException('New slot must be different from current slot.');
     }
 
-    // Validate new slot is in future
     const newDateTime = new Date(`${dto.date}T${dto.startTime}:00`);
     if (newDateTime <= now) {
       throw new BadRequestException('Cannot reschedule to a past date/time.');
@@ -321,7 +319,6 @@ export class AppointmentService {
         throw new BadRequestException('This wave is full. No more bookings allowed.');
       }
 
-      // Release old wave slot
       const oldDate = new Date(appointment.date);
       const oldDayOfWeek = oldDate.toLocaleDateString('en-US', { weekday: 'long' });
       const oldWave = await this.waveScheduleRepo.findOne({
@@ -337,7 +334,6 @@ export class AppointmentService {
         await this.waveScheduleRepo.save(oldWave);
       }
 
-      // Book new wave
       const tokenNumber = newWave.bookedCount + 1;
       newWave.bookedCount = tokenNumber;
       await this.waveScheduleRepo.save(newWave);

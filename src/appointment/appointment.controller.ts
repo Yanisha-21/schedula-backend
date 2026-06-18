@@ -35,7 +35,6 @@ export class AppointmentController {
     return this.appointmentService.cancelAppointment(req.user, id);
   }
 
-  // ── RESCHEDULE (DAY 10) ──
   @UseGuards(JwtAuthGuard)
   @Patch(':id/reschedule')
   rescheduleAppointment(
