@@ -47,11 +47,17 @@ export class DoctorController {
     return this.doctorService.findAll(query);
   }
 
-  // ── DOCTOR APPOINTMENTS (DAY 8) ──
+  // ── DOCTOR APPOINTMENTS (DAY 8 + DAY 12) ──
   @UseGuards(JwtAuthGuard)
   @Get('appointments')
-  getDoctorAppointments(@Req() req) {
-    return this.doctorService.getDoctorAppointments(req.user);
+  getDoctorAppointments(@Req() req, @Query('date') date?: string) {
+    return this.doctorService.getDoctorAppointments(req.user, date);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('appointments/:id/cancel')
+  cancelAppointment(@Req() req, @Param('id', ParseIntPipe) id: number) {
+    return this.doctorService.doctorCancelAppointment(req.user, id);
   }
 
   // ── SCHEDULING TYPE (DAY 9) ──
