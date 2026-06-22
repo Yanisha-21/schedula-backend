@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
 
@@ -6,7 +6,7 @@ import { Doctor, SchedulingType } from './entities/doctor.entity';
 import { RecurringAvailability } from './entities/recurring-availability.entity';
 import { CustomAvailability } from './entities/custom-availability.entity';
 import { WaveSchedule } from './entities/wave-schedule.entity';
-import { Appointment } from '../appointment/entities/appointment.entity';
+import { Appointment, AppointmentStatus } from '../appointment/entities/appointment.entity';
 import { User } from '../users/entities/user.entity';
 import { GetDoctorsQueryDto } from './dto/get-doctors-query.dto';
 import { CreateRecurringAvailabilityDto } from './dto/create-recurring-availability.dto';
@@ -278,14 +278,30 @@ export class DoctorService {
     };
   }
 
-  // ── DOCTOR APPOINTMENTS (DAY 8) ──
+  // ── DOCTOR APPOINTMENTS (DAY 8 + DAY 12) ──
 
-  async getDoctorAppointments(user: User) {
+  async getDoctorAppointments(user: User, date?: string) {
     const doctor = await this.doctorRepo.findOne({ where: { user: { id: user.id } } });
     if (!doctor) throw new NotFoundException('Doctor profile not found');
 
+    if (date) {
+      const parsedDate = new Date(date);
+      if (isNaN(parsedDate.getTime())) {
+        throw new BadRequestException('Invalid date format. Use YYYY-MM-DD.');
+      }
+    }
+
+    const whereClause: any = {
+      doctor: { id: doctor.id },
+      status: AppointmentStatus.BOOKED,
+    };
+
+    if (date) {
+      whereClause.date = date;
+    }
+
     const appointments = await this.appointmentRepo.find({
-      where: { doctor: { id: doctor.id } },
+      where: whereClause,
       relations: { patient: true },
       order: { date: 'ASC', startTime: 'ASC' },
     });
@@ -296,13 +312,51 @@ export class DoctorService {
       success: true,
       data: appointments.map((a) => ({
         id: a.id,
-        patient: { id: a.patient.id, fullName: a.patient.fullName },
+        patient: {
+          id: a.patient.id,
+          fullName: a.patient.fullName,
+          age: a.patient.age,
+          gender: a.patient.gender,
+          contactDetails: a.patient.contactDetails,
+        },
         date: a.date,
         startTime: a.startTime,
         endTime: a.endTime,
         status: a.status,
+        schedulingType: doctor.schedulingType,
       })),
     };
+  }
+
+  // ── DOCTOR CANCEL APPOINTMENT (DAY 12) ──
+
+  async doctorCancelAppointment(user: User, id: number) {
+    const doctor = await this.doctorRepo.findOne({ where: { user: { id: user.id } } });
+    if (!doctor) throw new NotFoundException('Doctor profile not found');
+
+    if (isNaN(id) || id < 1) {
+      throw new BadRequestException('Invalid appointment ID.');
+    }
+
+    const appointment = await this.appointmentRepo.findOne({
+      where: { id },
+      relations: { doctor: true, patient: true },
+    });
+
+    if (!appointment) throw new NotFoundException('Appointment not found.');
+
+    if (appointment.doctor.id !== doctor.id) {
+      throw new ForbiddenException('You are not authorized to cancel this appointment.');
+    }
+
+    if (appointment.status === AppointmentStatus.CANCELLED) {
+      throw new BadRequestException('Appointment is already cancelled.');
+    }
+
+    appointment.status = AppointmentStatus.CANCELLED;
+    await this.appointmentRepo.save(appointment);
+
+    return { success: true, message: 'Appointment cancelled successfully.' };
   }
 
   // ── SCHEDULING TYPE (DAY 9) ──

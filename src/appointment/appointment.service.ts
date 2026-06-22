@@ -210,32 +210,6 @@ export class AppointmentService {
     return { success: true, message: 'Appointment cancelled successfully.' };
   }
 
-  // ── DOCTOR: GET APPOINTMENTS ──
-  async getDoctorAppointments(user: User) {
-    const doctor = await this.doctorRepo.findOne({ where: { user: { id: user.id } } });
-    if (!doctor) throw new NotFoundException('Doctor profile not found');
-
-    const appointments = await this.appointmentRepo.find({
-      where: { doctor: { id: doctor.id } },
-      relations: { patient: true },
-      order: { date: 'ASC', startTime: 'ASC' },
-    });
-
-    if (appointments.length === 0) throw new NotFoundException('No appointments found.');
-
-    return {
-      success: true,
-      data: appointments.map((a) => ({
-        id: a.id,
-        patient: { id: a.patient.id, fullName: a.patient.fullName },
-        date: a.date,
-        startTime: a.startTime,
-        endTime: a.endTime,
-        status: a.status,
-      })),
-    };
-  }
-
   // ── RESCHEDULE APPOINTMENT (DAY 10) ──
   async rescheduleAppointment(user: User, id: number, dto: CreateAppointmentDto) {
     const patient = await this.patientRepo.findOne({ where: { user: { id: user.id } } });
