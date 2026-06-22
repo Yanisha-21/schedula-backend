@@ -132,6 +132,24 @@ export class DoctorController {
     return this.doctorService.getStreamSlots(doctorId, query);
   }
 
+  // ── NEXT AVAILABLE APPOINTMENT (DAY 13) ──
+  // Public route — no auth needed, patient is browsing before booking.
+  // `duration` is optional (defaults to 30 minutes in the service).
+  @Get(':doctorId/next-available')
+  getNextAvailableSlots(
+    @Param(
+      'doctorId',
+      new ParseIntPipe({
+        exceptionFactory: () =>
+          new BadRequestException('Invalid doctor ID. ID must be a number.'),
+      }),
+    )
+    doctorId: number,
+    @Query('duration') duration?: number,
+  ) {
+    return this.doctorService.getNextAvailableSlots(doctorId, duration ? Number(duration) : 30);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('availability')
   createRecurringAvailability(

@@ -467,4 +467,145 @@ export class DoctorService {
 
     return this.getAvailableSlots(doctorId, query);
   }
+
+  // ── NEXT AVAILABLE APPOINTMENT (DAY 13) ──
+
+  async getNextAvailableSlots(doctorId: number, duration: number = 30) {
+    const doctor = await this.doctorRepo.findOne({ where: { id: doctorId } });
+    if (!doctor) throw new NotFoundException(`Doctor with ID ${doctorId} not found.`);
+
+    if (duration < 5) {
+      throw new BadRequestException('Invalid duration. Must be at least 5 minutes.');
+    }
+
+    const MAX_DAYS = 30;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (let i = 0; i < MAX_DAYS; i++) {
+      const searchDate = new Date(today);
+      searchDate.setDate(today.getDate() + i);
+
+      const dateStr = searchDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const dayOfWeek = searchDate.toLocaleDateString('en-US', { weekday: 'long' });
+
+      // ── WAVE SCHEDULING ──
+      if (doctor.schedulingType === SchedulingType.WAVE) {
+        const waves = await this.waveScheduleRepo.find({
+          where: { doctor: { id: doctorId }, dayOfWeek },
+        });
+
+        if (waves.length === 0) continue; // no wave schedule for this day, skip
+
+        const availableWaves = waves.filter((w) => w.bookedCount < w.maxPatients);
+
+        if (availableWaves.length === 0) continue; // all waves full, try next day
+
+        return {
+          success: true,
+          doctorId,
+          schedulingType: 'WAVE',
+          nextAvailableDate: dateStr,
+          data: availableWaves.map((w) => ({
+            id: w.id,
+            startTime: w.startTime,
+            endTime: w.endTime,
+            maxPatients: w.maxPatients,
+            bookedCount: w.bookedCount,
+            availableSlots: w.maxPatients - w.bookedCount,
+          })),
+        };
+      }
+
+      // ── STREAM SCHEDULING ──
+      // Check custom availability first, then fall back to recurring
+      const custom = await this.customRepo.find({
+        where: { doctor: { id: doctorId }, date: dateStr },
+      });
+
+      let availabilityWindows: { startTime: string; endTime: string }[] = [];
+
+      if (custom.length > 0) {
+        availabilityWindows = custom.map((c) => ({ startTime: c.startTime, endTime: c.endTime }));
+      } else {
+        const recurring = await this.recurringRepo.find({
+          where: { doctor: { id: doctorId }, dayOfWeek },
+        });
+        if (recurring.length === 0) continue; // no availability for this day, skip
+        availabilityWindows = recurring.map((r) => ({ startTime: r.startTime, endTime: r.endTime }));
+      }
+
+      // Generate all possible slots for this day
+      const allSlots: { startTime: string; endTime: string }[] = [];
+      const now = new Date();
+      const isToday = i === 0;
+
+      for (const window of availabilityWindows) {
+        const [startH, startM] = window.startTime.split(':').map(Number);
+        const [endH, endM] = window.endTime.split(':').map(Number);
+
+        let currentMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+
+        while (currentMinutes + duration <= endMinutes) {
+          const slotStartH = Math.floor(currentMinutes / 60);
+          const slotStartM = currentMinutes % 60;
+          const slotEndMinutes = currentMinutes + duration;
+          const slotEndH = Math.floor(slotEndMinutes / 60);
+          const slotEndM = slotEndMinutes % 60;
+
+          const slotStart = `${String(slotStartH).padStart(2, '0')}:${String(slotStartM).padStart(2, '0')}`;
+          const slotEnd = `${String(slotEndH).padStart(2, '0')}:${String(slotEndM).padStart(2, '0')}`;
+
+          // Skip past slots if searching today
+          if (isToday) {
+            const slotDateTime = new Date(searchDate);
+            slotDateTime.setHours(slotStartH, slotStartM, 0, 0);
+            if (slotDateTime <= now) {
+              currentMinutes += duration;
+              continue;
+            }
+          }
+
+          allSlots.push({ startTime: slotStart, endTime: slotEnd });
+          currentMinutes += duration;
+        }
+      }
+
+      if (allSlots.length === 0) continue; // no slots generated, try next day
+
+      // Filter out already-booked slots
+      const bookedAppointments = await this.appointmentRepo.find({
+        where: {
+          doctor: { id: doctorId },
+          date: dateStr,
+          status: AppointmentStatus.BOOKED,
+        },
+      });
+
+      const bookedTimes = new Set(
+        bookedAppointments.map((a) => `${a.startTime}-${a.endTime}`)
+      );
+
+      const availableSlots = allSlots.filter(
+        (s) => !bookedTimes.has(`${s.startTime}-${s.endTime}`)
+      );
+
+      if (availableSlots.length === 0) continue; // all slots booked, try next day
+
+      return {
+        success: true,
+        doctorId,
+        schedulingType: 'STREAM',
+        nextAvailableDate: dateStr,
+        totalSlots: availableSlots.length,
+        data: availableSlots,
+      };
+    }
+
+    // Exhausted all 30 days with no available slot
+    throw new NotFoundException(
+      'No appointments available in the next 30 working days. Please try again later.'
+    );
+  }
 }
