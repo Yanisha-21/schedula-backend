@@ -10,6 +10,8 @@ import { CustomAvailability } from '../doctor/entities/custom-availability.entit
 import { WaveSchedule } from '../doctor/entities/wave-schedule.entity';
 import { User } from '../users/entities/user.entity';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType } from '../notification/entities/notification.entity';
 
 @Injectable()
 export class AppointmentService {
@@ -26,7 +28,9 @@ export class AppointmentService {
     private customRepo: Repository<CustomAvailability>,
     @InjectRepository(WaveSchedule)
     private waveScheduleRepo: Repository<WaveSchedule>,
-  ) {}
+
+    private readonly notificationService: NotificationService,
+  ) { }
 
   // ── BOOK APPOINTMENT ──
   async bookAppointment(user: User, dto: CreateAppointmentDto) {
@@ -94,6 +98,13 @@ export class AppointmentService {
       });
       const saved = await this.appointmentRepo.save(appointment);
 
+      await this.notificationService.createNotification(
+        patient,
+        'Appointment Booked',
+        `Your appointment with Dr. ${doctor.fullName} has been booked successfully.`,
+        NotificationType.APPOINTMENT_BOOKED,
+      );
+
       return {
         ...saved,
         schedulingType: 'WAVE',
@@ -117,8 +128,6 @@ export class AppointmentService {
         status: AppointmentStatus.BOOKED,
       },
     });
-    if (existing) throw new BadRequestException('This slot is already booked.');
-
     const appointment = this.appointmentRepo.create({
       doctor,
       patient,
@@ -128,7 +137,16 @@ export class AppointmentService {
       status: AppointmentStatus.BOOKED,
     });
 
-    return await this.appointmentRepo.save(appointment);
+    const savedAppointment = await this.appointmentRepo.save(appointment);
+
+    await this.notificationService.createNotification(
+      patient,
+      'Appointment Booked',
+      `Your appointment with Dr. ${doctor.fullName} has been booked successfully.`,
+      NotificationType.APPOINTMENT_BOOKED,
+    );
+
+    return savedAppointment;
   }
 
   // ── HELPER ──
@@ -207,7 +225,17 @@ export class AppointmentService {
     appointment.status = AppointmentStatus.CANCELLED;
     await this.appointmentRepo.save(appointment);
 
-    return { success: true, message: 'Appointment cancelled successfully.' };
+    await this.notificationService.createNotification(
+      patient,
+      'Appointment Cancelled',
+      'Your appointment has been cancelled successfully.',
+      NotificationType.APPOINTMENT_CANCELLED,
+    );
+
+    return {
+      success: true,
+      message: 'Appointment cancelled successfully.',
+    };
   }
 
   // ── RESCHEDULE APPOINTMENT (DAY 10) ──
@@ -358,7 +386,15 @@ export class AppointmentService {
     appointment.date = dto.date;
     appointment.startTime = dto.startTime;
     appointment.endTime = dto.endTime;
+
     await this.appointmentRepo.save(appointment);
+
+    await this.notificationService.createNotification(
+      patient,
+      'Appointment Rescheduled',
+      `Your appointment with ${doctor.fullName} has been rescheduled to ${dto.date} ${dto.startTime}.`,
+      NotificationType.APPOINTMENT_RESCHEDULED,
+    );
 
     return {
       success: true,

@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { DoctorModule } from './doctor/doctor.module';
 import { PatientModule } from './patient/patient.module';
 import { AppointmentModule } from './appointment/appointment.module';
+import { NotificationModule } from './notification/notification.module';
 import { User } from './users/entities/user.entity';
 import { Doctor } from './doctor/entities/doctor.entity';
 import { Patient } from './patient/entities/patient.entity';
@@ -13,6 +14,7 @@ import { RecurringAvailability } from './doctor/entities/recurring-availability.
 import { CustomAvailability } from './doctor/entities/custom-availability.entity';
 import { Appointment } from './appointment/entities/appointment.entity';
 import { WaveSchedule } from './doctor/entities/wave-schedule.entity';
+import { Notification } from './notification/entities/notification.entity';
 
 @Module({
   imports: [
@@ -26,7 +28,16 @@ import { WaveSchedule } from './doctor/entities/wave-schedule.entity';
         username: configService.get('DB_USERNAME'),
         password: configService.get('DB_PASSWORD'),
         database: configService.get('DB_NAME'),
-        entities: [User, Doctor, Patient, RecurringAvailability, CustomAvailability, Appointment, WaveSchedule],
+        entities: [
+          User,
+          Doctor,
+          Patient,
+          RecurringAvailability,
+          CustomAvailability,
+          Appointment,
+          WaveSchedule,
+          Notification,
+        ],
         synchronize: false,
         ssl: {
           rejectUnauthorized: false,
@@ -38,6 +49,7 @@ import { WaveSchedule } from './doctor/entities/wave-schedule.entity';
     DoctorModule,
     PatientModule,
     AppointmentModule,
+    NotificationModule,
   ],
 })
 export class AppModule {}
