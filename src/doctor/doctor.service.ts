@@ -471,23 +471,59 @@ export class DoctorService {
   // ── NEXT AVAILABLE APPOINTMENT (DAY 13) ──
 
   async getNextAvailableSlots(doctorId: number, duration: number = 30) {
+    // FIX 1: Validate doctor exists
     const doctor = await this.doctorRepo.findOne({ where: { id: doctorId } });
     if (!doctor) throw new NotFoundException(`Doctor with ID ${doctorId} not found.`);
 
+    // FIX 2: Check doctor availability flag — if on leave/unavailable, reject immediately
+    if (!doctor.isAvailable) {
+      throw new BadRequestException(
+        'Doctor is currently unavailable. Please try another doctor or check back later.',
+      );
+    }
+
+    // Validate appointment duration
     if (duration < 5) {
       throw new BadRequestException('Invalid duration. Must be at least 5 minutes.');
     }
 
-    const MAX_DAYS = 30;
+    // FIX 3: Validate scheduling type explicitly — reject unknown types
+    if (
+      doctor.schedulingType !== SchedulingType.STREAM &&
+      doctor.schedulingType !== SchedulingType.WAVE
+    ) {
+      throw new BadRequestException(
+        `Invalid scheduling type: ${doctor.schedulingType}. Must be STREAM or WAVE.`,
+      );
+    }
+
+    // FIX 4: Count WORKING DAYS only (Mon–Fri), skip weekends
+    // workingDaysSearched tracks how many Mon–Fri days we've checked
+    // calendarDayOffset advances through calendar days including weekends
+    const MAX_WORKING_DAYS = 30;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    for (let i = 0; i < MAX_DAYS; i++) {
+    let workingDaysSearched = 0;
+    let calendarDayOffset = 0;
+
+    while (workingDaysSearched < MAX_WORKING_DAYS) {
       const searchDate = new Date(today);
-      searchDate.setDate(today.getDate() + i);
+      searchDate.setDate(today.getDate() + calendarDayOffset);
+      calendarDayOffset++;
+
+      const dayOfWeek = searchDate.toLocaleDateString('en-US', { weekday: 'long' });
+
+      // Skip Saturday and Sunday — don't count them toward the 30 working days
+      if (dayOfWeek === 'Saturday' || dayOfWeek === 'Sunday') {
+        continue;
+      }
+
+      // Only count Mon–Fri toward the working day limit
+      workingDaysSearched++;
 
       const dateStr = searchDate.toISOString().split('T')[0]; // YYYY-MM-DD
-      const dayOfWeek = searchDate.toLocaleDateString('en-US', { weekday: 'long' });
+      const isToday = calendarDayOffset === 1; // first iteration is today
 
       // ── WAVE SCHEDULING ──
       if (doctor.schedulingType === SchedulingType.WAVE) {
@@ -495,11 +531,14 @@ export class DoctorService {
           where: { doctor: { id: doctorId }, dayOfWeek },
         });
 
-        if (waves.length === 0) continue; // no wave schedule for this day, skip
+        // No wave schedule for this day — skip
+        if (waves.length === 0) continue;
 
+        // Filter waves that still have open capacity
         const availableWaves = waves.filter((w) => w.bookedCount < w.maxPatients);
 
-        if (availableWaves.length === 0) continue; // all waves full, try next day
+        // All waves full — skip
+        if (availableWaves.length === 0) continue;
 
         return {
           success: true,
@@ -531,14 +570,14 @@ export class DoctorService {
         const recurring = await this.recurringRepo.find({
           where: { doctor: { id: doctorId }, dayOfWeek },
         });
-        if (recurring.length === 0) continue; // no availability for this day, skip
+        // No availability configured for this day — skip
+        if (recurring.length === 0) continue;
         availabilityWindows = recurring.map((r) => ({ startTime: r.startTime, endTime: r.endTime }));
       }
 
       // Generate all possible slots for this day
       const allSlots: { startTime: string; endTime: string }[] = [];
       const now = new Date();
-      const isToday = i === 0;
 
       for (const window of availabilityWindows) {
         const [startH, startM] = window.startTime.split(':').map(Number);
@@ -572,9 +611,10 @@ export class DoctorService {
         }
       }
 
-      if (allSlots.length === 0) continue; // no slots generated, try next day
+      // No slots generated for this day — skip
+      if (allSlots.length === 0) continue;
 
-      // Filter out already-booked slots
+      // Filter out already-booked slots using a Set for O(1) lookup
       const bookedAppointments = await this.appointmentRepo.find({
         where: {
           doctor: { id: doctorId },
@@ -584,14 +624,15 @@ export class DoctorService {
       });
 
       const bookedTimes = new Set(
-        bookedAppointments.map((a) => `${a.startTime}-${a.endTime}`)
+        bookedAppointments.map((a) => `${a.startTime}-${a.endTime}`),
       );
 
       const availableSlots = allSlots.filter(
-        (s) => !bookedTimes.has(`${s.startTime}-${s.endTime}`)
+        (s) => !bookedTimes.has(`${s.startTime}-${s.endTime}`),
       );
 
-      if (availableSlots.length === 0) continue; // all slots booked, try next day
+      // All slots already booked — skip
+      if (availableSlots.length === 0) continue;
 
       return {
         success: true,
@@ -603,9 +644,9 @@ export class DoctorService {
       };
     }
 
-    // Exhausted all 30 days with no available slot
+    // Exhausted all 30 working days with no available slot
     throw new NotFoundException(
-      'No appointments available in the next 30 working days. Please try again later.'
+      'No appointments available in the next 30 working days. Please try again later.',
     );
   }
 }
