@@ -9,6 +9,7 @@ import { CustomAvailability } from '../doctor/entities/custom-availability.entit
 import { WaveSchedule } from '../doctor/entities/wave-schedule.entity';
 import { AppointmentController } from './appointment.controller';
 import { AppointmentService } from './appointment.service';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { AppointmentService } from './appointment.service';
       CustomAvailability,
       WaveSchedule,
     ]),
+    NotificationModule,
   ],
   controllers: [AppointmentController],
   providers: [AppointmentService],
