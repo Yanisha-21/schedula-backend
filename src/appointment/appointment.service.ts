@@ -142,7 +142,7 @@ export class AppointmentService {
     await this.notificationService.createNotification(
       patient,
       'Appointment Booked',
-      `Your appointment with Dr. ${doctor.fullName} has been booked successfully.`,
+      `Your appointment with ${doctor.fullName} has been booked successfully.`,
       NotificationType.APPOINTMENT_BOOKED,
     );
 
