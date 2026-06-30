@@ -43,6 +43,11 @@ export class Appointment {
   })
   status!: AppointmentStatus;
 
+  // Tracks whether a reminder notification has already been sent
+  // Prevents duplicate reminders from being created on subsequent cron runs
+  @Column({ default: false })
+  reminderSent!: boolean;
+
   @CreateDateColumn()
   createdAt!: Date;
 }

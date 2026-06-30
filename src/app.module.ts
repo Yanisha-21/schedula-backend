@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { AuthModule } from './auth/auth.module';
 import { DoctorModule } from './doctor/doctor.module';
 import { PatientModule } from './patient/patient.module';
 import { AppointmentModule } from './appointment/appointment.module';
 import { NotificationModule } from './notification/notification.module';
+import { ReminderModule } from './reminder/reminder.module';
 import { User } from './users/entities/user.entity';
 import { Doctor } from './doctor/entities/doctor.entity';
 import { Patient } from './patient/entities/patient.entity';
@@ -19,6 +21,8 @@ import { Notification } from './notification/entities/notification.entity';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Register the NestJS schedule module — required for @Cron decorators to work
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -50,6 +54,7 @@ import { Notification } from './notification/entities/notification.entity';
     PatientModule,
     AppointmentModule,
     NotificationModule,
+    ReminderModule,
   ],
 })
 export class AppModule {}
