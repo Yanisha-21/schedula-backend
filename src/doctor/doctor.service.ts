@@ -467,4 +467,186 @@ export class DoctorService {
 
     return this.getAvailableSlots(doctorId, query);
   }
+
+  // ── NEXT AVAILABLE APPOINTMENT (DAY 13) ──
+
+  async getNextAvailableSlots(doctorId: number, duration: number = 30) {
+    // FIX 1: Validate doctor exists
+    const doctor = await this.doctorRepo.findOne({ where: { id: doctorId } });
+    if (!doctor) throw new NotFoundException(`Doctor with ID ${doctorId} not found.`);
+
+    // FIX 2: Check doctor availability flag — if on leave/unavailable, reject immediately
+    if (!doctor.isAvailable) {
+      throw new BadRequestException(
+        'Doctor is currently unavailable. Please try another doctor or check back later.',
+      );
+    }
+
+    // Validate appointment duration
+    if (duration < 5) {
+      throw new BadRequestException('Invalid duration. Must be at least 5 minutes.');
+    }
+
+    // FIX 3: Validate scheduling type explicitly — reject unknown types
+    if (
+      doctor.schedulingType !== SchedulingType.STREAM &&
+      doctor.schedulingType !== SchedulingType.WAVE
+    ) {
+      throw new BadRequestException(
+        `Invalid scheduling type: ${doctor.schedulingType}. Must be STREAM or WAVE.`,
+      );
+    }
+
+    // FIX 4: Count WORKING DAYS only (Mon–Fri), skip weekends
+    // workingDaysSearched tracks how many Mon–Fri days we've checked
+    // calendarDayOffset advances through calendar days including weekends
+    const MAX_WORKING_DAYS = 30;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let workingDaysSearched = 0;
+    let calendarDayOffset = 0;
+
+    while (workingDaysSearched < MAX_WORKING_DAYS) {
+      const searchDate = new Date(today);
+      searchDate.setDate(today.getDate() + calendarDayOffset);
+      calendarDayOffset++;
+
+      const dayOfWeek = searchDate.toLocaleDateString('en-US', { weekday: 'long' });
+
+      // Skip Saturday and Sunday — don't count them toward the 30 working days
+      if (dayOfWeek === 'Saturday' || dayOfWeek === 'Sunday') {
+        continue;
+      }
+
+      // Only count Mon–Fri toward the working day limit
+      workingDaysSearched++;
+
+      const dateStr = searchDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const isToday = calendarDayOffset === 1; // first iteration is today
+
+      // ── WAVE SCHEDULING ──
+      if (doctor.schedulingType === SchedulingType.WAVE) {
+        const waves = await this.waveScheduleRepo.find({
+          where: { doctor: { id: doctorId }, dayOfWeek },
+        });
+
+        // No wave schedule for this day — skip
+        if (waves.length === 0) continue;
+
+        // Filter waves that still have open capacity
+        const availableWaves = waves.filter((w) => w.bookedCount < w.maxPatients);
+
+        // All waves full — skip
+        if (availableWaves.length === 0) continue;
+
+        return {
+          success: true,
+          doctorId,
+          schedulingType: 'WAVE',
+          nextAvailableDate: dateStr,
+          data: availableWaves.map((w) => ({
+            id: w.id,
+            startTime: w.startTime,
+            endTime: w.endTime,
+            maxPatients: w.maxPatients,
+            bookedCount: w.bookedCount,
+            availableSlots: w.maxPatients - w.bookedCount,
+          })),
+        };
+      }
+
+      // ── STREAM SCHEDULING ──
+      // Check custom availability first, then fall back to recurring
+      const custom = await this.customRepo.find({
+        where: { doctor: { id: doctorId }, date: dateStr },
+      });
+
+      let availabilityWindows: { startTime: string; endTime: string }[] = [];
+
+      if (custom.length > 0) {
+        availabilityWindows = custom.map((c) => ({ startTime: c.startTime, endTime: c.endTime }));
+      } else {
+        const recurring = await this.recurringRepo.find({
+          where: { doctor: { id: doctorId }, dayOfWeek },
+        });
+        // No availability configured for this day — skip
+        if (recurring.length === 0) continue;
+        availabilityWindows = recurring.map((r) => ({ startTime: r.startTime, endTime: r.endTime }));
+      }
+
+      // Generate all possible slots for this day
+      const allSlots: { startTime: string; endTime: string }[] = [];
+      const now = new Date();
+
+      for (const window of availabilityWindows) {
+        const [startH, startM] = window.startTime.split(':').map(Number);
+        const [endH, endM] = window.endTime.split(':').map(Number);
+
+        let currentMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+
+        while (currentMinutes + duration <= endMinutes) {
+          const slotStartH = Math.floor(currentMinutes / 60);
+          const slotStartM = currentMinutes % 60;
+          const slotEndMinutes = currentMinutes + duration;
+          const slotEndH = Math.floor(slotEndMinutes / 60);
+          const slotEndM = slotEndMinutes % 60;
+
+          const slotStart = `${String(slotStartH).padStart(2, '0')}:${String(slotStartM).padStart(2, '0')}`;
+          const slotEnd = `${String(slotEndH).padStart(2, '0')}:${String(slotEndM).padStart(2, '0')}`;
+
+          // Skip past slots if searching today
+          if (isToday) {
+            const slotDateTime = new Date(searchDate);
+            slotDateTime.setHours(slotStartH, slotStartM, 0, 0);
+            if (slotDateTime <= now) {
+              currentMinutes += duration;
+              continue;
+            }
+          }
+
+          allSlots.push({ startTime: slotStart, endTime: slotEnd });
+          currentMinutes += duration;
+        }
+      }
+
+      // No slots generated for this day — skip
+      if (allSlots.length === 0) continue;
+
+      // Filter out already-booked slots using a Set for O(1) lookup
+      const bookedAppointments = await this.appointmentRepo.find({
+        where: {
+          doctor: { id: doctorId },
+          date: dateStr,
+          status: AppointmentStatus.BOOKED,
+        },
+      });
+
+      const bookedTimes = new Set(
+        bookedAppointments.map((a) => `${a.startTime}-${a.endTime}`),
+      );
+
+      const availableSlots = allSlots.filter(
+        (s) => !bookedTimes.has(`${s.startTime}-${s.endTime}`),
+      );
+
+      // All slots already booked — skip
+      if (availableSlots.length === 0) continue;
+
+      return {
+        success: true,
+        doctorId,
+        schedulingType: 'STREAM',
+        nextAvailableDate: dateStr,
+        totalSlots: availableSlots.length,
+        data: availableSlots,
+      };
+    }
+
+    // Exhausted all 30 working days with no available slot
+    throw new NotFoundException(
+      'No appointments available in the next 30 working days. Please try again later.',
+    );
+  }
 }
