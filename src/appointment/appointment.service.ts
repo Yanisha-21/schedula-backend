@@ -45,6 +45,20 @@ export class AppointmentService {
       throw new BadRequestException('Invalid date format. Use YYYY-MM-DD.');
     }
 
+    // ── BOOKING WINDOW VALIDATION (DAY 18) ──
+    // Only today's date is allowed — past and future dates are rejected
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD in UTC
+
+    if (dto.date < todayStr) {
+      throw new BadRequestException('Booking for past dates is not allowed. Please book for today only.');
+    }
+
+    if (dto.date > todayStr) {
+      throw new BadRequestException('Booking for future dates is not allowed. Please book for today only.');
+    }
+    // ── END BOOKING WINDOW VALIDATION ──
+
     if (dto.startTime >= dto.endTime) {
       throw new BadRequestException('Start time must be before end time.');
     }
@@ -101,7 +115,7 @@ export class AppointmentService {
       await this.notificationService.createNotification(
         patient,
         'Appointment Booked',
-        `Your appointment with Dr. ${doctor.fullName} has been booked successfully.`,
+        `Your appointment with ${doctor.fullName} has been booked successfully.`,
         NotificationType.APPOINTMENT_BOOKED,
       );
 
@@ -128,6 +142,8 @@ export class AppointmentService {
         status: AppointmentStatus.BOOKED,
       },
     });
+    if (existing) throw new BadRequestException('This slot is already booked.');
+
     const appointment = this.appointmentRepo.create({
       doctor,
       patient,
