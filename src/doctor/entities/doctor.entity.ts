@@ -48,6 +48,29 @@ export class Doctor {
   })
   schedulingType!: SchedulingType;
 
+  // ── DAY 19: Booking window ──────────────────────────────────────────────────
+  // Booking opens  = consultationStartTime − 2 hours
+  // Booking closes = consultationEndTime   − 1 hour
+  // Both stored as HH:MM strings (24-hour). Null = no window enforcement.
+  @Column({ nullable: true, type: 'varchar', length: 5 })
+  consultationStartTime!: string | null;   // e.g. '09:00'
+
+  @Column({ nullable: true, type: 'varchar', length: 5 })
+  consultationEndTime!: string | null;     // e.g. '17:00'
+
+  // IANA timezone string — defaults to UTC when null
+  @Column({ nullable: true, type: 'varchar', length: 64 })
+  timezone!: string | null;               // e.g. 'Asia/Kolkata'
+  // ── END DAY 19 ─────────────────────────────────────────────────────────────
+
+  // ── DAY 20: Future booking policy ──────────────────────────────────────────
+  @Column({ default: false })
+  allowFutureBooking!: boolean;
+
+  @Column({ nullable: true, type: 'int' })
+  maxFutureBookingDays!: number | null;
+  // ── END DAY 20 ─────────────────────────────────────────────────────────────
+
   @OneToOne(() => User, (user) => user.doctor, { onDelete: 'CASCADE' })
   @JoinColumn()
   user!: User;

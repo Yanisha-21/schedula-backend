@@ -19,10 +19,11 @@ import { CreateRecurringAvailabilityDto } from './dto/create-recurring-availabil
 import { CreateCustomAvailabilityDto } from './dto/create-custom-availability.dto';
 import { GetSlotsQueryDto } from './dto/get-slots-query.dto';
 import { UpdateSchedulingTypeDto, CreateWaveScheduleDto, GetWaveSlotsQueryDto } from './dto/create-schedule.dto';
+import { UpdateFutureBookingDto } from './dto/update-future-booking.dto';
 
 @Controller('doctor')
 export class DoctorController {
-  constructor(private readonly doctorService: DoctorService) {}
+  constructor(private readonly doctorService: DoctorService) { }
 
   @UseGuards(JwtAuthGuard)
   @Post('profile')
@@ -197,6 +198,12 @@ export class DoctorController {
   @Get('availability/date')
   getAvailabilityByDate(@Req() req, @Query('date') date: string) {
     return this.doctorService.getAvailabilityByDate(req.user, date);
+  }
+  // ── FUTURE BOOKING CONFIG (DAY 20) ──
+  @UseGuards(JwtAuthGuard)
+  @Patch('future-booking-config')
+  updateFutureBookingConfig(@Req() req, @Body() dto: UpdateFutureBookingDto) {
+    return this.doctorService.updateFutureBookingConfig(req.user, dto);
   }
 
   @Get(':id')
