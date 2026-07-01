@@ -56,8 +56,14 @@ export class AppointmentService {
       throw new BadRequestException('Invalid date format. Use YYYY-MM-DD.');
     }
 
-    const today    = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    if (dto.startTime >= dto.endTime) {
+      throw new BadRequestException('Start time must be before end time.');
+    }
+
+    // ── BOOKING WINDOW VALIDATION (DAY 18) ──
+    // Only today's date is allowed — past and future dates are rejected
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD in UTC
 
     // ── 2. Past date: always rejected ──────────────────────────────────────
     if (dto.date < todayStr) {
@@ -88,26 +94,70 @@ export class AppointmentService {
         );
       }
     }
+    // ── END DAY 18 VALIDATION ──
 
-    // ── 4. Day 19 — booking window (today-only check) ──────────────────────
-    // The window only applies when the patient is booking for TODAY.
-    // Future-date bookings are not constrained by today's clinic hours.
-    if (dto.date === todayStr) {
-      const windowResult = checkBookingWindow(
-        doctor.consultationStartTime,
-        doctor.consultationEndTime,
-        doctor.timezone,
+    // ── TIME-BASED BOOKING WINDOW (DAY 19) ──
+    // Determine the doctor's consultation window for today (custom override takes priority over recurring).
+    // Booking window = [consultationStart - 2 hours, consultationEnd - 1 hour]
+    const dayOfWeekForWindow = appointmentDate.toLocaleDateString('en-US', { weekday: 'long' });
+
+    const customForWindow = await this.customRepo.find({
+      where: { doctor: { id: dto.doctorId }, date: dto.date },
+    });
+
+    let consultationWindows: { startTime: string; endTime: string }[] = [];
+
+    if (customForWindow.length > 0) {
+      consultationWindows = customForWindow.map((c) => ({ startTime: c.startTime, endTime: c.endTime }));
+    } else {
+      const recurringForWindow = await this.recurringRepo.find({
+        where: { doctor: { id: dto.doctorId }, dayOfWeek: dayOfWeekForWindow },
+      });
+      consultationWindows = recurringForWindow.map((r) => ({ startTime: r.startTime, endTime: r.endTime }));
+    }
+
+    if (consultationWindows.length === 0) {
+      throw new BadRequestException('Doctor is unavailable today. No consultation schedule configured.');
+    }
+
+    // Earliest start and latest end across all windows define the consultation period
+    const consultationStart = consultationWindows
+      .map((w) => w.startTime)
+      .sort()[0];
+    const consultationEnd = consultationWindows
+      .map((w) => w.endTime)
+      .sort()
+      .slice(-1)[0];
+
+    // Validate the consultation timings themselves
+    if (consultationStart >= consultationEnd) {
+      throw new BadRequestException('Invalid consultation timings configured for this doctor.');
+    }
+
+    // Compute booking window: open 2 hours before start, close 1 hour before end
+    const consultationStartDateTime = new Date(`${dto.date}T${consultationStart}:00`);
+    const consultationEndDateTime = new Date(`${dto.date}T${consultationEnd}:00`);
+
+    const bookingOpensAt = new Date(consultationStartDateTime);
+    bookingOpensAt.setHours(bookingOpensAt.getHours() - 2);
+
+    const bookingClosesAt = new Date(consultationEndDateTime);
+    bookingClosesAt.setHours(bookingClosesAt.getHours() - 1);
+
+    const now = new Date();
+
+    if (now < bookingOpensAt) {
+      throw new BadRequestException(
+        `Booking window has not opened yet. Booking opens at ${bookingOpensAt.toTimeString().slice(0, 5)}.`,
       );
-
-      if (!windowResult.allowed) {
-        throw new BadRequestException(windowResult.reason);
-      }
     }
 
-    // ── 5. Time sanity ─────────────────────────────────────────────────────
-    if (dto.startTime >= dto.endTime) {
-      throw new BadRequestException('Start time must be before end time.');
+    if (now > bookingClosesAt) {
+      throw new BadRequestException(
+        `Booking window has closed. Booking closed at ${bookingClosesAt.toTimeString().slice(0, 5)}.`,
+      );
     }
+    // ── END DAY 19 VALIDATION ──
 
     const appointmentDateTime = new Date(`${dto.date}T${dto.startTime}:00`);
     if (appointmentDateTime <= new Date()) {
