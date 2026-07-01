@@ -15,7 +15,7 @@ import { NotificationModule } from '../notification/notification.module';
   imports: [
     TypeOrmModule.forFeature([
       Appointment,
-      Doctor,
+      Doctor,           // already here — controller now also uses it
       Patient,
       RecurringAvailability,
       CustomAvailability,
@@ -24,6 +24,6 @@ import { NotificationModule } from '../notification/notification.module';
     NotificationModule,
   ],
   controllers: [AppointmentController],
-  providers: [AppointmentService],
+  providers:   [AppointmentService],
 })
 export class AppointmentModule {}

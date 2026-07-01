@@ -13,6 +13,7 @@ import { CreateRecurringAvailabilityDto } from './dto/create-recurring-availabil
 import { CreateCustomAvailabilityDto } from './dto/create-custom-availability.dto';
 import { GetSlotsQueryDto } from './dto/get-slots-query.dto';
 import { UpdateSchedulingTypeDto, CreateWaveScheduleDto, GetWaveSlotsQueryDto } from './dto/create-schedule.dto';
+import { UpdateFutureBookingDto } from './dto/update-future-booking.dto';
 
 @Injectable()
 export class DoctorService {
@@ -27,7 +28,7 @@ export class DoctorService {
     private waveScheduleRepo: Repository<WaveSchedule>,
     @InjectRepository(Appointment)
     private appointmentRepo: Repository<Appointment>,
-  ) {}
+  ) { }
 
   // ── EXISTING METHODS ──
 
@@ -648,5 +649,22 @@ export class DoctorService {
     throw new NotFoundException(
       'No appointments available in the next 30 working days. Please try again later.',
     );
+  }
+    async updateFutureBookingConfig(user: User, dto: UpdateFutureBookingDto) {
+      const doctor = await this.doctorRepo.findOne({ where: { user: { id: user.id } } });
+      if (!doctor) throw new NotFoundException('Doctor profile not found');
+
+      doctor.allowFutureBooking = dto.allowFutureBooking;
+      doctor.maxFutureBookingDays = dto.maxFutureBookingDays ?? null;
+
+      await this.doctorRepo.save(doctor);
+
+      return {
+        success: true,
+        message: 'Future booking config updated.',
+        allowFutureBooking: doctor.allowFutureBooking,
+        maxFutureBookingDays: doctor.maxFutureBookingDays,
+      };
+    
   }
 }
